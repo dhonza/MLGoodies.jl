@@ -8,7 +8,9 @@ include("transforms/Transforms.jl")
 @reexport using .Transforms
 
 include("datasets/Datasets.jl")
-@reexport using .Datasets
+
+include("batches/Batches.jl")
+@reexport using .Batches
 
 include("evaluation/Evaluation.jl")
 @reexport using .Evaluation

@@ -325,7 +325,7 @@ end
 
 Create a `DataSource` with source id `sid` based on a DataFrame `s`.
 """
-datasource(s::AbstractDataFrame; sid::Symbol=:default) = datasource(s, names(s); sid=sid)
+datasource(s::AbstractDataFrame; sid::Symbol=:default) = datasource(s, Symbol.(names(s)); sid=sid)
 
 """
     datasource(s, names::Vector{Symbol}; sid::Symbol=:default)
@@ -863,7 +863,7 @@ if less then or equal to `maxunique` values are present in data.
 """
 function nominal(df::AbstractDataFrame; maxunique::Union{Int,Nothing} = nothing)
     ret = OrderedSet{Symbol}()
-    for (name, type) in zip(names(df), eltypes(df))
+    for (name, type) in zip(names(df), eltype.(eachcol(df)))
         if type <: Real
             if maxunique != nothing && length(unique(df[name])) <= maxunique
                 push!(ret, name)

@@ -2,16 +2,17 @@ module Utils
 
 using DataFrames
 using DataStructures: OrderedDict
+using Dates
 
-export dview, toposort, coldim, ncols
+using CodecZlib
+using Serialization
+using Printf
 
-# obsdim(::AbstractDataFrame) = 1
-# obsdim(::AbstractMatrix) = 2
+export dview, toposort, coldim, ncols, FlushedLogger
+export serialize_gzip, deserialize_gzip
 
 coldim(::AbstractDataFrame) = 2
 coldim(::AbstractMatrix) = 1
-
-# nobs(d) = size(d, obsdim(d))
 
 """
     ncols(d)
@@ -20,7 +21,10 @@ Return the number of columns, i.e., features of `d`.
 """
 ncols(d) = size(d, coldim(d))
 
-dview(d::AbstractDataFrame, obs, cols) = view(d, obs, cols)
+function dview(d::AbstractDataFrame, obs, cols)
+    view(d, obs, cols)
+end
+
 dview(d::AbstractMatrix, obs, cols) = view(d, cols, obs)
 
 """
@@ -96,6 +100,26 @@ function toposort(nodes, predf, nodef = identity)
         end
     end
     l
+end
+
+#-------------------------------------------------------------------------------
+# Serialization
+#-------------------------------------------------------------------------------
+function serialize_gzip(fname, data)
+    open(fname, "w") do f
+        gf = GzipCompressorStream(f)
+        Serialization.serialize(gf, data)
+        close(gf)
+    end
+end
+
+function deserialize_gzip(fname)
+    open(fname) do f
+        gf = GzipDecompressorStream(f)
+        data = Serialization.deserialize(gf)
+        close(gf)
+        data
+    end
 end
 
 end

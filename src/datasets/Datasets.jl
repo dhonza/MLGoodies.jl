@@ -1,6 +1,5 @@
-module Datasets
-
-export Dataset, loaddataset, obsparts, colparts, colpartcols, nobs, ncols, tonumerical, buildtransform, transform, invert
+export Dataset, loaddataset, obsparts, colparts, colpartcols, nobs, ncols, tonumerical, buildtransform, 
+    transform, invert, shufflesplit, shufflestratifiedsplit
 
 using CSV
 using DataFrames
@@ -33,9 +32,20 @@ struct Dataset
     obspartitions::OrderedDict{Symbol,Any}
     colpartitions::OrderedDict{Symbol,Any}
     function Dataset(data, cols, desc, obspartitions, colpartitions)
-        #TOOO check no intersections of indices
         op = OrderedDict{Symbol,Any}(obspartitions)
         cp = OrderedDict{Symbol,Any}(colpartitions)
+        for (k, v) in cp
+            length(v) == 0 && error("empty column partition: $k")
+            if  !(Int <: eltype(v))
+                idxs =  map(x -> findfirst(e -> e == x, cols), v)
+                # @show k, eltype(v), idxs
+                if collect(idxs[1]:idxs[end]) == idxs # convert to range if possible
+                    idxs = idxs[1]:idxs[end]
+                end 
+                cp[k] = idxs
+            end
+        end
+        
         new(data, cols, desc, op, cp)
     end
 end
@@ -172,40 +182,40 @@ function loaddataset(name::Symbol)
     eval(Symbol("_load_$(string(name))"))()
 end
 
-function _shufflesplit(df, obsparts::Vector{Symbol}, fractions; seed = 1)
+function shufflesplit(df::AbstractDataFrame, obsparts::Vector{Symbol}, fractions; seed = 1)
     Random.seed!(seed)
     Pair.(obsparts, first.(parentindices.(splitobs(shuffleobs(df), fractions))))
 end
 
-function _shufflestratifiedsplit(f, df, obsparts::Vector{Symbol}, fractions; seed = 1)
+function shufflestratifiedsplit(f, df::AbstractDataFrame, obsparts::Vector{Symbol}, fractions; seed = 1)
     Random.seed!(seed)
     Pair.(obsparts, first.(parentindices.(stratifiedobs(f, df, fractions))))
 end
 
 function _load_abalone()
     cols = [:sex, :length, :diameter, :height, :whole_weight, :shucked_weight, :viscera_weight, :shell_weight, :rings]
-    _load_UCI("abalone", cols, df->_shufflestratifiedsplit(row->row[:rings], df, [:train, :test], 0.75), 
+    _load_UCI("abalone", cols, df->shufflestratifiedsplit(row->row[:rings], df, [:train, :test], 0.75), 
                                     [:X => 1:length(cols) - 1, :T => [length(cols)]])
 end
 
 function _load_ecoli()
     cols = [:sequence_name, :mcg, :gvh, :lip, :chg, :aac, :alm1, :alm2, :class]
     targets = [:class]
-    _load_UCI("ecoli", cols, df->_shufflestratifiedsplit(row->row[:class], df, [:train, :test], 0.5), 
+    _load_UCI("ecoli", cols, df->shufflestratifiedsplit(row->row[:class], df, [:train, :test], 0.5), 
             [:X => 1:length(cols) - 1, :T => [length(cols)]]; 
             delim = " ", ignorerepeated = true)
 end
 
 function _load_housing()
     cols = [:crim, :zn, :indus, :chas, :nox, :rm, :age, :dis, :rad, :tax, :ptratio, :b, :lstat, :medv]
-    _load_UCI("housing", cols, df->_shufflesplit(df, [:train, :test], 0.8), [:X => 1:length(cols) - 1, :T => [length(cols)]]; 
+    _load_UCI("housing", cols, df->shufflesplit(df, [:train, :test], 0.8), [:X => 1:length(cols) - 1, :T => [length(cols)]]; 
         delim = " ", ignorerepeated = true)
 end
 
 function _load_iris()
     cols = [:sepal_length, :sepal_width,  :petal_length, :petal_width, :class]
     targets = [:class]
-    _load_UCI("iris", cols, df->_shufflestratifiedsplit(row->row[:class], df, [:train, :test], 0.8), 
+    _load_UCI("iris", cols, df->shufflestratifiedsplit(row->row[:class], df, [:train, :test], 0.8), 
             [:X => 1:length(cols) - 1, :T => [length(cols)]]; limit = 150)
 end
 
@@ -217,6 +227,11 @@ struct DatasetTransform
     trns::OrderedDict{Symbol,ColTrans}
 end
 
+"""
+    tonumerical(dataset::Dataset,  obspart::Union{Symbol,Colon}, colpartopts::Pair{Symbol,<:AbstractDict}...)
+
+DOCUMENT!
+"""
 function tonumerical(dataset::Dataset,  obspart::Union{Symbol,Colon}, colpartopts::Pair{Symbol,<:AbstractDict}...)
     #TODO remove use buildtransform instead?
     cpsetup = DefaultDict{Symbol,Any,Any}(Dict(:nominal => nothing, :standardize => true))
@@ -270,6 +285,4 @@ function Base.show(io::IO, dtrn::DatasetTransform)
         end
         i < length(dtrn.trns) && println(io)
     end
-end
-
 end
